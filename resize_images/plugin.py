@@ -25,6 +25,7 @@ class ResizeImagesPlugin(BasePlugin):
 		('extensions', config_options.Type(list, default=['.jpg', '.jpeg', '.png', '.gif', '.svg'], required=False)),
 		('enable_cache', config_options.Type(bool, default=True, required=False)),
 		('debug', config_options.Type(bool, default=False, required=False)),
+		('recursive', config_options.Type(bool, default=False, required=False)),
 	)
 
 	def on_files(self, files, config):

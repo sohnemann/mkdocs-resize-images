@@ -4,6 +4,9 @@
 # License: MIT
 # GitHub: https://github.com/JakubAndrysek/mkdocs-resize-images
 # PyPI: https://pypi.org/project/mkdocs-resize-images/
+###################################################################
+# Amended by: sohnemann 50672942+sohnemann@users.noreply.github.com
+# GitHub: https://github.com/sohnemann
 
 from pathlib import Path
 from itertools import chain
@@ -25,7 +28,7 @@ class ResizeImagesPlugin(BasePlugin):
 		('extensions', config_options.Type(list, default=['.jpg', '.jpeg', '.png', '.gif', '.svg'], required=False)),
 		('enable_cache', config_options.Type(bool, default=True, required=False)),
 		('debug', config_options.Type(bool, default=False, required=False)),
-		('recursive', config_options.Type(bool, default=False, required=False)),
+		('recursive', config_options.Type(bool, default=True, required=False)),
 	)
 
 	def on_files(self, files, config):
@@ -38,12 +41,19 @@ class ResizeImagesPlugin(BasePlugin):
 			hash_file_path = source_dir / '.resize-hash'
 			existing_hashes = self.get_existing_hashes(hash_file_path)
 
+			if self.config['recursive']:
+				glob_func = source_dir.rglob
+			else:
+				glob_func = source_dir.glob
+
 			for ext in self.config['extensions']:
-				for file in chain(source_dir.glob(f'*{ext.lower()}'), source_dir.glob(f'*{ext.upper()}')):
+				for file in chain(glob_func(f'*{ext.lower()}'), glob_func(f'*{ext.upper()}')):
+					if not file.is_file():
+						continue
 					file_hash = self.get_file_hash(file)
 					if not self.config['enable_cache'] or file_hash not in existing_hashes:
 						content_changed = True
-						self.resize_image(file, target_dir)
+						self.resize_image(file, target_dir, source_dir)
 						if self.config['debug']:
 							log.info(f'Resized image {file} to {target_dir}')
 						existing_hashes.append(file_hash)
@@ -51,16 +61,25 @@ class ResizeImagesPlugin(BasePlugin):
 			if content_changed:
 				self.write_hashes(existing_hashes, hash_file_path)
 
-		log.info(f'Resized images from `{self.config["source-dir"]}` to `{self.config["target-dir"]} with size {self.config["size"]}`')
+		log.info(
+			f"Resized images from `{self.config['source-dir']}` "
+			f"to `{self.config['target-dir']}` with size {self.config['size']} "
+			f"(recursive={self.config['recursive']})"
+		)
 		return files
 
-	def resize_image(self, file, target_dir):
+	def resize_image(self, file, target_dir, source_dir):
 		try:
 			with Image.open(file) as img:
 				tuple_size = tuple(self.config['size'])
 				img.thumbnail(tuple_size)
-				base_filename = file.name
-				img.save(target_dir / base_filename)
+
+				# Preserve subdirectory structure in target-dir
+				relative_path = file.relative_to(source_dir)
+				output_path = target_dir / relative_path
+				output_path.parent.mkdir(parents=True, exist_ok=True)
+
+				img.save(output_path)
 		except Exception as e:
 			log.error(f'Error resizing image {file}: {e}')
 
